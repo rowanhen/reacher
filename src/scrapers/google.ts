@@ -22,12 +22,13 @@ export async function scrapeGoogle(
 
   const page = await context.newPage();
   const results: BusinessResult[] = [];
+  const seen = new Set<string>();
 
   try {
     const mapsUrl = `https://www.google.co.uk/maps/search/${encodeURIComponent(query)}?gl=gb&hl=en-GB`;
     await page.goto(mapsUrl, { waitUntil: "networkidle" });
 
-    // Dismiss GDPR consent banner if present (Google redirects to consent.google.com in EU)
+    // Dismiss GDPR consent banner if present
     const acceptBtn = page.locator('button:has-text("Accept all"), form[action*="consent"] button[value="1"]').first();
     if (await acceptBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
       await acceptBtn.click();
@@ -37,7 +38,6 @@ export async function scrapeGoogle(
     // Wait for results panel
     await page.waitForSelector('[role="feed"]', { timeout: 15000 });
 
-    // Scroll to load more results
     const feed = page.locator('[role="feed"]');
     let prevCount = 0;
 
@@ -48,61 +48,42 @@ export async function scrapeGoogle(
         if (results.length >= limit) break;
 
         try {
-          await card.click();
-          await page.waitForTimeout(1200);
+          // Name
+          const name = await card.locator('.qBF1Pd').first().textContent().catch(() => null);
+          if (!name?.trim() || seen.has(name.trim())) continue;
 
-          const name = await page
-            .locator('h1[class*="DUwDvf"]')
-            .first()
-            .textContent()
-            .catch(() => null);
+          // Rating and review count from aria-label e.g. "4.6 stars 9 reviews"
+          const starLabel = await card.locator('[role="img"][aria-label*="stars"]').first().getAttribute('aria-label').catch(() => null);
+          const ratingMatch = starLabel?.match(/([\d.]+)\s*stars?\s*([\d,]+)?\s*review/);
+          const rating = ratingMatch ? parseFloat(ratingMatch[1]) : undefined;
+          const reviewCount = ratingMatch?.[2] ? parseInt(ratingMatch[2].replace(/,/g, ''), 10) : undefined;
 
-          if (!name) continue;
+          // Address: second row of info spans ("Category · Street address")
+          const infoRows = await card.locator('.W4Efsd .W4Efsd').all();
+          let address: string | undefined;
+          if (infoRows[0]) {
+            const rowText = await infoRows[0].textContent().catch(() => null);
+            // Format: "Category · Address" — take the part after ·
+            const parts = rowText?.split('·');
+            address = parts && parts.length > 1 ? parts[parts.length - 1].trim() : undefined;
+          }
 
-          const address = await page
-            .locator('button[data-item-id="address"]')
-            .first()
-            .textContent()
-            .catch(() => null);
+          // Phone: .UsdlK class
+          const phone = await card.locator('.UsdlK').first().textContent().catch(() => null);
 
-          const phone = await page
-            .locator('button[data-item-id*="phone"]')
-            .first()
-            .textContent()
-            .catch(() => null);
+          // Maps URL
+          const cardUrl = await card.locator('a[href*="maps"]').first().getAttribute('href').catch(() => null);
 
-          const website = await page
-            .locator('a[data-item-id="authority"]')
-            .first()
-            .getAttribute("href")
-            .catch(() => null);
-
-          const ratingText = await page
-            .locator('div[class*="F7nice"] span[aria-hidden="true"]')
-            .first()
-            .textContent()
-            .catch(() => null);
-
-          const reviewText = await page
-            .locator('div[class*="F7nice"] span[aria-label*="review"]')
-            .first()
-            .getAttribute("aria-label")
-            .catch(() => null);
-
-          const mapsUrl = page.url();
-
+          seen.add(name.trim());
           results.push({
             name: name.trim(),
             businessType,
-            address: address?.trim(),
+            address: address || undefined,
             location,
-            phone: phone?.trim(),
-            website: website ?? undefined,
-            rating: ratingText ? parseFloat(ratingText) : undefined,
-            reviewCount: reviewText
-              ? parseInt(reviewText.replace(/[^0-9]/g, ""), 10)
-              : undefined,
-            googleMapsUrl: mapsUrl,
+            phone: phone?.trim() || undefined,
+            rating,
+            reviewCount,
+            googleMapsUrl: cardUrl ?? undefined,
             source: "google",
             scrapedAt: new Date().toISOString(),
           });
@@ -111,13 +92,13 @@ export async function scrapeGoogle(
         }
       }
 
-      const newCount = (await page.locator('.Nv2PK').count());
-      if (newCount === prevCount) break;
+      const newCount = await page.locator('.Nv2PK').count();
+      if (newCount === prevCount || results.length >= limit) break;
       prevCount = newCount;
 
-      // Scroll feed to load more
-      await feed.evaluate((el) => el.scrollBy(0, 600));
-      await page.waitForTimeout(1000);
+      // Scroll to bottom of feed to trigger loading more results
+      await feed.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+      await page.waitForTimeout(2000);
     }
   } finally {
     await browser.close();
