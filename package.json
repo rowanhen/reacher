@@ -1,6 +1,6 @@
 {
   "name": "@shepherd-terminal/reacher",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI tool for scraping LinkedIn and Google Maps to find businesses by type and location",
   "type": "module",
   "bin": {
