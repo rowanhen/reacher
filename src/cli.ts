@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { searchCommand } from "./commands/search.js";
+import { enrichCommand } from "./commands/enrich.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(
@@ -19,5 +20,6 @@ program
   .version(pkg.version);
 
 program.addCommand(searchCommand);
+program.addCommand(enrichCommand);
 
 program.parse();

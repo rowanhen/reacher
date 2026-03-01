@@ -7,7 +7,7 @@ export interface BusinessResult {
   location?: string;
   phone?: string;
   website?: string;
-  email?: string;
+  emails?: string[];
   rating?: number;
   reviewCount?: number;
   description?: string;

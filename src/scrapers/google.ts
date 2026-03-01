@@ -1,15 +1,18 @@
 import { chromium } from "playwright";
 import type { BusinessResult, BrowserOptions } from "../core/types.js";
 
+// NOTE: Network interception of Google Maps XHR responses (XSSI-prefixed JSON)
+// is reserved for a future implementation once the exact field positions in
+// Google's undocumented API response arrays are confirmed. The DOM approach
+// below is the current reliable path.
+
 export async function scrapeGoogle(
   businessType: string,
   location: string | undefined,
   limit: number,
   opts: BrowserOptions
 ): Promise<BusinessResult[]> {
-  const query = location
-    ? `${businessType} in ${location}`
-    : businessType;
+  const query = location ? `${businessType} in ${location}` : businessType;
 
   const browser = await chromium.launch({ headless: opts.headless });
   const context = await browser.newContext({
@@ -29,10 +32,16 @@ export async function scrapeGoogle(
     await page.goto(mapsUrl, { waitUntil: "networkidle" });
 
     // Dismiss GDPR consent banner if present
-    const acceptBtn = page.locator('button:has-text("Accept all"), form[action*="consent"] button[value="1"]').first();
+    const acceptBtn = page
+      .locator(
+        'button:has-text("Accept all"), form[action*="consent"] button[value="1"]'
+      )
+      .first();
     if (await acceptBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
       await acceptBtn.click();
-      await page.waitForNavigation({ waitUntil: "networkidle", timeout: 10000 }).catch(() => null);
+      await page
+        .waitForNavigation({ waitUntil: "networkidle", timeout: 10000 })
+        .catch(() => null);
     }
 
     // Wait for results panel
@@ -42,37 +51,54 @@ export async function scrapeGoogle(
     let prevCount = 0;
 
     while (results.length < limit) {
-      const cards = await page.locator('.Nv2PK').all();
+      const cards = await page.locator(".Nv2PK").all();
 
       for (const card of cards) {
         if (results.length >= limit) break;
 
         try {
-          // Name
-          const name = await card.locator('.qBF1Pd').first().textContent().catch(() => null);
+          const name = await card
+            .locator(".qBF1Pd")
+            .first()
+            .textContent()
+            .catch(() => null);
           if (!name?.trim() || seen.has(name.trim())) continue;
 
-          // Rating and review count from aria-label e.g. "4.6 stars 9 reviews"
-          const starLabel = await card.locator('[role="img"][aria-label*="stars"]').first().getAttribute('aria-label').catch(() => null);
-          const ratingMatch = starLabel?.match(/([\d.]+)\s*stars?\s*([\d,]+)?\s*review/);
+          const starLabel = await card
+            .locator('[role="img"][aria-label*="stars"]')
+            .first()
+            .getAttribute("aria-label")
+            .catch(() => null);
+          const ratingMatch = starLabel?.match(
+            /([\d.]+)\s*stars?\s*([\d,]+)?\s*review/
+          );
           const rating = ratingMatch ? parseFloat(ratingMatch[1]) : undefined;
-          const reviewCount = ratingMatch?.[2] ? parseInt(ratingMatch[2].replace(/,/g, ''), 10) : undefined;
+          const reviewCount = ratingMatch?.[2]
+            ? parseInt(ratingMatch[2].replace(/,/g, ""), 10)
+            : undefined;
 
-          // Address: second row of info spans ("Category · Street address")
-          const infoRows = await card.locator('.W4Efsd .W4Efsd').all();
+          const infoRows = await card.locator(".W4Efsd .W4Efsd").all();
           let address: string | undefined;
           if (infoRows[0]) {
             const rowText = await infoRows[0].textContent().catch(() => null);
-            // Format: "Category · Address" — take the part after ·
-            const parts = rowText?.split('·');
-            address = parts && parts.length > 1 ? parts[parts.length - 1].trim() : undefined;
+            const parts = rowText?.split("·");
+            address =
+              parts && parts.length > 1
+                ? parts[parts.length - 1].trim()
+                : undefined;
           }
 
-          // Phone: .UsdlK class
-          const phone = await card.locator('.UsdlK').first().textContent().catch(() => null);
+          const phone = await card
+            .locator(".UsdlK")
+            .first()
+            .textContent()
+            .catch(() => null);
 
-          // Maps URL
-          const cardUrl = await card.locator('a[href*="maps"]').first().getAttribute('href').catch(() => null);
+          const cardUrl = await card
+            .locator('a[href*="maps"]')
+            .first()
+            .getAttribute("href")
+            .catch(() => null);
 
           seen.add(name.trim());
           results.push({
@@ -92,11 +118,10 @@ export async function scrapeGoogle(
         }
       }
 
-      const newCount = await page.locator('.Nv2PK').count();
+      const newCount = await page.locator(".Nv2PK").count();
       if (newCount === prevCount || results.length >= limit) break;
       prevCount = newCount;
 
-      // Scroll to bottom of feed to trigger loading more results
       await feed.evaluate((el) => el.scrollTo(0, el.scrollHeight));
       await page.waitForTimeout(2000);
     }
