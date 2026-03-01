@@ -1,0 +1,57 @@
+{
+  "name": "@shepherd-terminal/reacher",
+  "version": "0.1.0",
+  "description": "CLI tool for scraping LinkedIn and Google Maps to find businesses by type and location",
+  "type": "module",
+  "bin": {
+    "reacher": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "bun run src/cli.ts",
+    "test": "bun test",
+    "prepare": "git config core.hooksPath .githooks"
+  },
+  "keywords": [
+    "scraper",
+    "linkedin",
+    "google",
+    "business",
+    "leads",
+    "cli",
+    "playwright"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rowanhen/reacher.git"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "playwright": "^1.49.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,21 @@
+#!/bin/sh
+# Conventional Commits validation hook
+# Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+
+commit_msg=$(cat "$1")
+pattern="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?(!)?: .{1,}"
+
+if ! echo "$commit_msg" | grep -qE "$pattern"; then
+  echo "Error: Commit message does not follow Conventional Commits format."
+  echo ""
+  echo "Expected: <type>[optional scope][!]: <description>"
+  echo ""
+  echo "Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+  echo ""
+  echo "Examples:"
+  echo "  feat: add google maps scraper"
+  echo "  fix(cli): handle network timeout errors"
+  echo "  feat!: redesign output format (breaking change)"
+  echo ""
+  exit 1
+fi
