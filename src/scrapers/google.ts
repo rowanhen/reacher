@@ -27,6 +27,13 @@ export async function scrapeGoogle(
     const mapsUrl = `https://www.google.co.uk/maps/search/${encodeURIComponent(query)}?gl=gb&hl=en-GB`;
     await page.goto(mapsUrl, { waitUntil: "networkidle" });
 
+    // Dismiss GDPR consent banner if present (Google redirects to consent.google.com in EU)
+    const acceptBtn = page.locator('button:has-text("Accept all"), form[action*="consent"] button[value="1"]').first();
+    if (await acceptBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
+      await acceptBtn.click();
+      await page.waitForNavigation({ waitUntil: "networkidle", timeout: 10000 }).catch(() => null);
+    }
+
     // Wait for results panel
     await page.waitForSelector('[role="feed"]', { timeout: 15000 });
 
@@ -35,7 +42,7 @@ export async function scrapeGoogle(
     let prevCount = 0;
 
     while (results.length < limit) {
-      const cards = await page.locator('[role="feed"] > div[jsaction]').all();
+      const cards = await page.locator('.Nv2PK').all();
 
       for (const card of cards) {
         if (results.length >= limit) break;
@@ -104,7 +111,7 @@ export async function scrapeGoogle(
         }
       }
 
-      const newCount = (await page.locator('[role="feed"] > div[jsaction]').count());
+      const newCount = (await page.locator('.Nv2PK').count());
       if (newCount === prevCount) break;
       prevCount = newCount;
 
