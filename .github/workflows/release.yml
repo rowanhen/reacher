@@ -70,20 +70,25 @@ jobs:
       - name: Test
         run: bun run test
 
-      - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public
-
-      - name: Commit and tag
+      - name: Commit version bump
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}
           git add package.json
           git commit -m "chore: release ${{ steps.version.outputs.tag }}"
+          git push origin HEAD
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
+      - name: Tag and push
+        run: |
+          git remote set-url origin https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}
           git tag "${{ steps.version.outputs.tag }}"
-          git push origin HEAD --tags
+          git push origin --tags
 
       - name: Create GitHub Release
         env:
