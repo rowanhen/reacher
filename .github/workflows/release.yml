@@ -1,18 +1,8 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      bump:
-        description: "Version bump (auto-detected from commits if not specified)"
-        required: false
-        type: choice
-        options:
-          - auto
-          - patch
-          - minor
-          - major
-        default: auto
+  push:
+    branches: [main]
 
 permissions:
   contents: write
@@ -21,20 +11,18 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Skip the version bump commit pushed by this workflow to avoid an infinite loop
+    if: "!startsWith(github.event.head_commit.message, 'chore: release')"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Determine version bump
         id: bump
         run: |
-          if [ "${{ inputs.bump }}" != "auto" ]; then
-            echo "type=${{ inputs.bump }}" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
           # Get commits since last tag
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -z "$LAST_TAG" ]; then
@@ -56,6 +44,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Update npm
         run: npm install -g npm@latest
@@ -79,9 +68,11 @@ jobs:
         run: bun run build
 
       - name: Test
-        run: bun test
+        run: bun run test
 
       - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public
 
       - name: Commit and tag
